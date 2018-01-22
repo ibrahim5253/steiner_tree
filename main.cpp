@@ -164,7 +164,7 @@ void solve()
 
 int main(int argc, char** argv)
 {
-	ios::sync_with_stdio(false);
+    ios::sync_with_stdio(false);
     ifstream fin(argv[3]);
     input(move(fin));
     shortest_path();
