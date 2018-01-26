@@ -17,16 +17,17 @@ using vll=vector<ll>;
 using pill=pair<int,ll>;
 using vvi=vector<vi>;
 
-ll const inf = 1e18;
+ll const inf = 1e10;
 
 int n, m, k;
 vector<vll> g;
+vvi next_hop;
 vi term;
 ll ans=inf;
 map<pair<string, int>, ll> dp;
 map<pair<string, int>, pair<int, pair<string, string>>> tree;
 
-void input(ifstream&& fin)
+void input(istream& fin)
 {
     string line;
     while (getline(fin, line)) {
@@ -34,20 +35,22 @@ void input(ifstream&& fin)
         string s;
         ss>>s;
         if (s=="SECTION" or s=="END") continue;
-        if (s=="Nodes") ss>>n, g.resize(n+1, vll(n+1, inf));
+        if (s=="Nodes") ss>>n, g.resize(n+1, vll(n+1, inf)), next_hop.resize(n+1, vi(n+1));
         if (s=="Edges") ss>>m;
         if (s=="E") {
             int u, v;ll w;ss>>u>>v>>w;
             g[u][v] = g[v][u] = min(g[u][v], w);
+            next_hop[u][v] = v, next_hop[v][u] = u;
         }
         if (s=="Terminals") ss>>k;
         if (s=="T") {
             int t;ss>>t;
             term.pb(t);
         }
+        if (s=="EOF") break;
     }
     for (int i=0; i<=n; ++i)
-        g[i][i] = 0;
+        g[i][i] = 0, next_hop[i][i] = i;
 }
 
 void shortest_path()
@@ -55,7 +58,9 @@ void shortest_path()
     for (int k=1; k<=n; ++k)
         for (int i=1; i<=n; ++i)
             for (int j=1; j<=n; ++j)
-                g[i][j] = min(g[i][j], g[i][k] + g[k][j]);
+                if (g[i][j] > g[i][k] + g[k][j])
+                    g[i][j] = g[i][k] + g[k][j],
+                    next_hop[i][j] = next_hop[i][k];
 }
 
 bool next_subset(string& s, string& t)
@@ -85,13 +90,7 @@ string complement(const string& s, const string& t)
 
 void print_actual_path(int i, int j)
 {
-    if (i==j) return;
-    ll v=inf;
-    int x;
-    for (int k=1; k<=n; ++k)
-        if (g[i][k] + g[k][j] < v) v=g[i][k]+g[k][j], x=k;
-    if (x==i or x==j) cout<<i<<" "<<j<<"\n";
-    else print_actual_path(i, x), print_actual_path(x, j);
+    while (i != j) cout<<i<<" "<<next_hop[i][j]<<"\n", i=next_hop[i][j];
 }
 
 void print_path(string s, int q)
@@ -165,13 +164,15 @@ void solve()
 int main(int argc, char** argv)
 {
     ios::sync_with_stdio(false);
-    ifstream fin(argv[3]);
-    input(move(fin));
+    input(cin);
     shortest_path();
-    if (k<=1) {
+    if (k<=1) 
         cout<<"VALUE 0\n";
-        return 0;
-    }
+    
+    else if (k==2) 
+        cout<<"VALUE "<<g[term[0]][term[1]]<<"\n",
+        print_actual_path(term[0], term[1]);
+    
     else solve();
 	return 0;
 }
