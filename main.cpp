@@ -6,6 +6,8 @@
 #define ff first
 #define ss second
 
+//#define DEBUG
+
 using namespace std;
 
 using ll=long long;
@@ -31,7 +33,7 @@ ll ans=0;
 vector<pii> steiner;
 vi low, depth;
 vvi bcc;
-vvi components;
+vector<set<int>> components;
 
 void input(istream& fin)
 {
@@ -78,7 +80,12 @@ void remove_long_edge()
 {
     for (int i=1; i<=n; ++i)
         for (auto it = adj[i].begin(); it != adj[i].end(); )
-            if (g[i][*it] < weight[i][*it]) adj[*it].erase(i),it = adj[i].erase(it); 
+            if (g[i][*it] < weight[i][*it]) {
+#ifdef DEBUG
+                cout<<"Removing "<<i<<"-"<<*it<<endl;
+#endif
+                adj[*it].erase(i),it = adj[i].erase(it); 
+            }
             else ++it;
 }
 
@@ -86,10 +93,13 @@ void remove_non_terminals()
 {
     for (int i=1; i<=n; ++i) {
         int j=i;
-        while(not removed[i] and not is_terminal[j] and adj[j].size()==1) {
+        while(not removed[j] and not is_terminal[j] and adj[j].size()==1) {
             auto p = *adj[j].begin();
             adj[p].erase(j);
             removed[j]=1;
+#ifdef DEBUG
+            cout<<"Removing "<<j<<endl;
+#endif
             j=p;
         }
     }
@@ -105,6 +115,9 @@ void remove_non_terminals()
             int u = *adj[x].begin();
             int v = *next(adj[x].begin());
             removed[x]=1;
+#ifdef DEBUG
+            cout<<"Removing "<<x<<endl;
+#endif
             adj[u].erase(x), adj[v].erase(x);
             if (adj[u].find(v) == adj[u].end())
                 adj[u].insert(v), adj[v].insert(u), 
@@ -184,11 +197,11 @@ void annotate_cut_vertex(int i, int p, int d, stack<pii>& s, int& count)
             if (low[j] >= d and p!=0 or p==0 and c>1) {
                 ++count;
                 int u, v;
-                vi new_comp;
+                set<int> new_comp;
                 do {
                     u=s.top().ff, v=s.top().ss;
                     bcc[u][v]=bcc[v][u]=count;
-                    new_comp.pb(u), new_comp.pb(v);
+                    new_comp.insert(u), new_comp.insert(v);
                     s.pop();
                 } while(mp(u,v) != mp(i,j));
                 components.pb(new_comp);
@@ -208,11 +221,11 @@ int label_bccs(int root)
     annotate_cut_vertex(root, 0, 1, s, count);
     if (not s.empty()) {
         ++count;
-        vi new_comp;
+        set<int> new_comp;
         while (not s.empty()) {
             int u = s.top().ff, v = s.top().ss;
             bcc[u][v] = bcc[v][u] = count;
-            new_comp.pb(u), new_comp.pb(v);
+            new_comp.insert(u), new_comp.insert(v);
             s.pop();
         }
         components.pb(new_comp);
@@ -244,15 +257,20 @@ void add_terminals(int root)
     }
 }
 
-void solve(vi& vertices)
+void solve(set<int>& vertices)
 {
-    map<pair<string, int>, ll> dp;
-    map<pair<string, int>, pair<int, pair<string, string>>> tree;
     vi term;
     for (auto& i: vertices)
         if(is_terminal[i]) term.pb(i);
     int q = term.back();
     int k = term.size();
+    if (k<=1) return;
+    if (k==2) {
+        ans += g[term[0]][term[1]], print_actual_path(term[0],term[1]);
+        return;
+    }
+    map<pair<string, int>, ll> dp;
+    map<pair<string, int>, pair<int, pair<string, string>>> tree;
     term.pop_back();
     for (int i=0; i<term.size(); ++i) {
         string t(k-1, '0');
@@ -317,12 +335,10 @@ int main(int argc, char** argv)
     if (k<=1) 
         cout<<"VALUE 0\n";
     
-    else{ 
+    else { 
         preprocess();
-//        cout<<"preprocessing over.."<<endl;
-        vi vert, term;
+        vi term;
         for (int i=1; i<=n; ++i) {
-            if (not removed[i]) vert.pb(i);
             if (is_terminal[i]) term.pb(i);
         }
         if (k==2) 
@@ -335,9 +351,9 @@ int main(int argc, char** argv)
             for (auto& vert: components)
                 solve(vert);
             cout<<"VALUE "<<ans<<"\n";
-            for (auto& e: steiner)
-                cout<<e.ff<<" "<<e.ss<<"\n";
         }
+        for (auto& e: steiner)
+            cout<<e.ff<<" "<<e.ss<<"\n";
     }
 	return 0;
 }
