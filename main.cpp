@@ -27,9 +27,11 @@ vvi next_hop;
 vi is_terminal;
 vi removed;
 int  k;
-ll ans=inf;
-map<pair<string, int>, ll> dp;
-map<pair<string, int>, pair<int, pair<string, string>>> tree;
+ll ans=0;
+vector<pii> steiner;
+vi low, depth;
+vvi bcc;
+vvi components;
 
 void input(istream& fin)
 {
@@ -41,7 +43,8 @@ void input(istream& fin)
         if (s=="SECTION" or s=="END") continue;
         if (s=="Nodes") 
             ss>>n, g.resize(n+1, vll(n+1, inf)), next_hop.resize(n+1, vi(n+1)), 
-            adj.resize(n+1), is_terminal.resize(n+1,0), removed.resize(n+1, 0);
+            adj.resize(n+1),is_terminal.resize(n+1,0), removed.resize(n+1,  0),
+            low.resize(n+1), depth.resize(n+1, 0),  bcc.resize(n+1, vi(n+1,0));
         if (s=="Edges") ss>>m;
         if (s=="E") {
             int u, v;ll w;ss>>u>>v>>w;
@@ -148,7 +151,7 @@ string complement(const string& s, const string& t)
 
 void print_actual_path(int i, int j)
 {
-    while (i != j) cout<<i<<" "<<next_hop[i][j]<<"\n", i=next_hop[i][j];
+    while (i != j) steiner.pb(mp(i,next_hop[i][j])), i=next_hop[i][j];
 }
 
 bool all_zeros(string& s)
@@ -158,18 +161,96 @@ bool all_zeros(string& s)
     return true;
 }
 
-void print_path(string s, int q)
+void print_path(string s, int q,map<pair<string, int>, pair<int, pair<string, string>>>& tree)
 {
     if (all_zeros(s)) return;
     int p = tree[mp(s,q)].ff;
     print_actual_path(q, p);
     string e = tree[mp(s,q)].ss.ff, f = tree[mp(s,q)].ss.ss;
-    print_path(e, p);
-    print_path(f, p);
+    print_path(e, p, tree);
+    print_path(f, p, tree);
 }
 
-void solve(vi& vertices, vi& term)
+void annotate_cut_vertex(int i, int p, int d, stack<pii>& s, int& count)
 {
+    depth[i]=d;
+    low[i]=d;
+    int c=0;
+    for (auto& j: adj[i]) {
+        if (depth[j]==0)  {
+            s.push(mp(i,j));
+            annotate_cut_vertex(j, i, d+1, s, count);
+            low[i] = min(low[i], low[j]);
+            if (low[j] >= d and p!=0 or p==0 and c>1) {
+                ++count;
+                int u, v;
+                vi new_comp;
+                do {
+                    u=s.top().ff, v=s.top().ss;
+                    bcc[u][v]=bcc[v][u]=count;
+                    new_comp.pb(u), new_comp.pb(v);
+                    s.pop();
+                } while(mp(u,v) != mp(i,j));
+                components.pb(new_comp);
+            }
+            ++c;
+        }
+        else if (j!=p and depth[j]<depth[i])
+            low[i] = min(low[i], depth[j]),
+            s.push(mp(i,j));
+    }
+}
+
+int label_bccs(int root)
+{
+    stack<pii> s;
+    int count=0;
+    annotate_cut_vertex(root, 0, 1, s, count);
+    if (not s.empty()) {
+        ++count;
+        vi new_comp;
+        while (not s.empty()) {
+            int u = s.top().ff, v = s.top().ss;
+            bcc[u][v] = bcc[v][u] = count;
+            new_comp.pb(u), new_comp.pb(v);
+            s.pop();
+        }
+        components.pb(new_comp);
+    }
+    return count;
+}
+
+void add_terminals(int root)
+{
+    vi par(n+1, 0);
+    queue<int> q;
+    q.push(root);
+    par[root]=root;
+    while (not q.empty()) {
+        int x = q.front();
+        q.pop();
+        for (auto& j: adj[x])
+            if (par[j]==0) 
+                par[j]=x, q.push(j);
+    }
+    for (int i=1; i<=n; ++i) {
+        if (not is_terminal[i]) continue;
+        int j=i, pre=i;
+        while (par[j]!=j) {
+            if (pre != j and bcc[j][par[j]] != bcc[j][pre]) is_terminal[j]=true;
+            pre =      j;
+            j   = par[j];
+        }
+    }
+}
+
+void solve(vi& vertices)
+{
+    map<pair<string, int>, ll> dp;
+    map<pair<string, int>, pair<int, pair<string, string>>> tree;
+    vi term;
+    for (auto& i: vertices)
+        if(is_terminal[i]) term.pb(i);
     int q = term.back();
     int k = term.size();
     term.pop_back();
@@ -208,6 +289,7 @@ void solve(vi& vertices, vi& term)
         }while (next_permutation(D.begin(), D.end()));
     }
     string C(k-1, '1');
+    ll val=inf;
     for (auto& j: vertices) {
         ll u=inf;
         string E=C;
@@ -219,12 +301,12 @@ void solve(vi& vertices, vi& term)
             if (u > dp[mp(E,j)] + dp[mp(Ec,j)])
                 u = dp[mp(E,j)] + dp[mp(Ec,j)], e=E, f=Ec;
         }
-        if (ans > g[q][j]+u)
-            ans = g[q][j]+u, 
+        if (val > g[q][j]+u)
+            val = g[q][j]+u, 
             tree[mp(C,q)] = mp(j, mp(e,f));
     }
-    cout<<"VALUE "<<ans<<"\n";
-    print_path(C,q);
+    ans += val;
+    print_path(C,q,tree);
 }
 
 int main(int argc, char** argv)
@@ -247,7 +329,15 @@ int main(int argc, char** argv)
             cout<<"VALUE "<<g[term[0]][term[1]]<<"\n",
             print_actual_path(term[0], term[1]);
     
-        else solve(vert, term);
+        else {
+            int num_bccs = label_bccs(term[0]);
+            add_terminals(term[0]);
+            for (auto& vert: components)
+                solve(vert);
+            cout<<"VALUE "<<ans<<"\n";
+            for (auto& e: steiner)
+                cout<<e.ff<<" "<<e.ss<<"\n";
+        }
     }
 	return 0;
 }
