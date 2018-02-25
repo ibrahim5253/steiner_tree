@@ -423,14 +423,14 @@ void solve(set<int>& vertices)
             dp[mp(t,j)] = g[term[i]][j],
             tree[mp(t, j)] = mp(term[i], mp(string(k-1,'0'), string(k-1, '0')));
     }
-    for (int m=2; m<term.size(); ++m) {
+    for (int m=2; m<term.size(); ++m) { // 2^k
         string D(k-1, '0'); 
         for (int i=k-1-m; i<k-1; ++i)
             D[i]='1';
         do {
             for (auto& i: vertices)
                 dp[mp(D,i)]=inf;
-            for (auto& j: vertices) {
+            for (auto& j: vertices) { // n*(2^k + n)
                 ll u=inf;
                 int p = D.find('1');
                 assert (p != string::npos);
@@ -548,7 +548,9 @@ int main(int argc, char** argv)
     for (auto& e: steiner)
         unroll(e, real_edges, ans);
     cout<<"VALUE "<<ans<<"\n";
-    for (auto& e: real_edges)
+    set<int> steiner_vert;
+    for (auto& e: real_edges) 
         cout<<e.ff<<" "<<e.ss<<"\n";
+    
 	return 0;
 }
