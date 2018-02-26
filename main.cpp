@@ -19,6 +19,8 @@ using vll=vector<ll>;
 using pill=pair<int,ll>;
 using vvi=vector<vi>;
 
+using label=pair<int, ll>;
+
 ll const inf = 1e10;
 
 class dsu {
@@ -318,14 +320,17 @@ bool all_zeros(string& s)
     return true;
 }
 
-void print_path(string s, int q,map<pair<string, int>, pair<int, pair<string, string>>>& tree)
+void print_path(int q, ll s, unordered_map<ll, set<label>> tree[])
 {
-    if (all_zeros(s)) return;
-    int p = tree[mp(s,q)].ff;
-    print_actual_path(q, p);
-    string e = tree[mp(s,q)].ss.ff, f = tree[mp(s,q)].ss.ss;
-    print_path(e, p, tree);
-    print_path(f, p, tree);
+    if (tree[q][s].size() == 1) {
+        auto i = tree[q][s].begin();
+        steiner.pb(make_edge(q, i->ff));
+        print_path(i->ff, s, tree);
+    }
+    else {
+        for (auto &i : tree[q][s])
+            print_path(i.ff, i.ss, tree);
+    }
 }
 
 void annotate_cut_vertex(int i, int p, int d, stack<pii>& s, int& count)
@@ -401,73 +406,106 @@ void add_terminals(int root)
     }
 }
 
-void solve(set<int>& vertices)
+string my_set_union(string& s1, string& s2)
+{
+    string s;
+    assert(s1.length() == s2.length());
+    for (int i=0; i<s1.length(); ++i)
+        if (s1[i]=='1' or s2[i]=='1') s.pb('1');
+        else s.pb('0');
+    return s;
+}
+
+void solve(const set<int>& vertices)
 {
     vi term;
     for (auto& i: vertices)
         if(is_terminal[i]) term.pb(i);
     int k = term.size();
     if (k<=1) return;
-    if (k==2) {
-        print_actual_path(term[0],term[1]);
-        return;
-    }
-    map<pair<string, int>, ll> dp;
-    map<pair<string, int>, pair<int, pair<string, string>>> tree;
+
+    unordered_map<ll, ll> dp[n+1];
+    unordered_map<ll, set<label>> tr[n+1];
+
+    auto my_comp = [&](label a, label b)->bool{
+                        ll va = (dp[a.ff].find(a.ss) != dp[a.ff].end() ? dp[a.ff][a.ss] : inf);
+                        ll vb = (dp[b.ff].find(b.ss) != dp[b.ff].end() ? dp[b.ff][b.ss] : inf);
+
+                        if (va < vb) return true;
+                        else if (vb < va) return false;
+                        return a < b;
+                   };
+    multiset<label, decltype(my_comp)> N(my_comp);
+    unordered_set<ll> P[n+1];
+    unordered_map<ll, decltype(N.begin())> it[n+1];
+
     int q = term.back();
     term.pop_back();
+
     for (int i=0; i<term.size(); ++i) {
-        string t(k-1, '0');
-        t[i]='1';
-        for (auto& j: vertices)
-            dp[mp(t,j)] = g[term[i]][j],
-            tree[mp(t, j)] = mp(term[i], mp(string(k-1,'0'), string(k-1, '0')));
+        ll t = 1ll<<i;
+        dp[term[i]][t] = 0;
+        it[term[i]][t] = N.insert(mp(term[i],t));
     }
-    for (int m=2; m<term.size(); ++m) { // 2^k
-        string D(k-1, '0'); 
-        for (int i=k-1-m; i<k-1; ++i)
-            D[i]='1';
-        do {
-            for (auto& i: vertices)
-                dp[mp(D,i)]=inf;
-            for (auto& j: vertices) { // n*(2^k + n)
-                ll u=inf;
-                int p = D.find('1');
-                assert (p != string::npos);
-                string S = D;
-                S[p]='0';
-                string E = D;
-                string e, f;
-                while (next_subset(E, S)) {
-                    string Ec = complement(E, D);
-                    if (u > dp[mp(E,j)] + dp[mp(Ec,j)])
-                        u = dp[mp(E,j)] + dp[mp(Ec,j)], e=E, f=Ec;
-                }
-                for (auto& i: vertices)
-                    if (dp[mp(D,i)] > g[i][j] + u)
-                        dp[mp(D,i)] = g[i][j] + u,
-                        tree[mp(D,i)] = mp(j, mp(e,f));
+    for (auto& i: vertices) {
+        ll t=0;
+        dp[i][t]=0;
+        P[i].insert(t);
+    }
+
+    ll R_r0 = (1ll<<(k-1)) - 1;
+    while (P[q].find(R_r0) == P[q].end()) {
+        auto i = N.begin();
+        int v = i->ff; ll I = i->ss;
+        P[v].insert(I);
+        N.erase(i);
+
+        for (auto &w : adj[v])
+            if (dp[v][I] + weight[v][w] < (dp[w].find(I)==dp[w].end()?inf:dp[w][I]) and P[w].find(I) == P[w].end()) {
+                dp[w][I] = dp[v][I] + weight[v][w],
+                tr[w][I] = set<label>({mp(v,I)});
+                if (it[w].find(I) != it[w].end())
+                    N.erase(it[w][I]) ;
+                it[w][I] = N.insert(mp(w,I));
             }
-        }while (next_permutation(D.begin(), D.end()));
-    }
-    string C(k-1, '1');
-    ll val=inf;
-    for (auto& j: vertices) {
-        ll u=inf;
-        string E=C;
-        string S=C;
-        S[0]='0';
-        string e, f;
-        while (next_subset(E, S)) {
-            string Ec = complement(E, C);
-            if (u > dp[mp(E,j)] + dp[mp(Ec,j)])
-                u = dp[mp(E,j)] + dp[mp(Ec,j)], e=E, f=Ec;
+
+        ll R_r0_I = R_r0^I;
+        int d = __builtin_popcountll(R_r0_I);
+
+        if ((1ll<<d) < P[v].size()) {
+            ll J = R_r0_I;
+            while (J) {
+                if (P[v].find(J) != P[v].end()) {
+                    ll IUJ = I|J;
+                    if (dp[v][I] +  dp[v][J] < (dp[v].find(IUJ)==dp[v].end()?inf:dp[v][IUJ])
+                            and P[v].find(IUJ) == P[v].end()) {
+                        dp[v][IUJ] = dp[v][I] + dp[v][J],
+                        tr[v][IUJ] = set<label>({mp(v,I), mp(v,J)});
+                        if (it[v].find(IUJ) != it[v].end())
+                            N.erase(it[v][IUJ]) ;
+                        it[v][IUJ] = N.insert(mp(v,IUJ));
+                    }
+                }
+                J = (J-1)&R_r0_I;
+            }
         }
-        if (val > g[q][j]+u)
-            val = g[q][j]+u, 
-            tree[mp(C,q)] = mp(j, mp(e,f));
+
+        else {
+            for (auto& J : P[v]) {
+                if ((I&J) != 0) continue;
+                ll IUJ = I|J;
+                if (dp[v][I] +  dp[v][J] < (dp[v].find(IUJ)==dp[v].end()?inf:dp[v][IUJ])
+                        and P[v].find(IUJ) == P[v].end()) {
+                    dp[v][IUJ] = dp[v][I] + dp[v][J],
+                    tr[v][IUJ] = set<label>({mp(v,I), mp(v,J)});
+                    if (it[v].find(IUJ) != it[v].end())
+                        N.erase(it[v][IUJ]) ;
+                    it[v][IUJ] = N.insert(mp(v,IUJ));
+                }
+            }
+        }
     }
-    print_path(C,q,tree);
+    print_path(q, R_r0, tr);
 }
 
 template<class T>
@@ -521,11 +559,11 @@ int main(int argc, char** argv)
 {
     ios::sync_with_stdio(false);
     input(cin);
-//    shortest_path();
+//  shortest_path();
     preprocess();
-    shortest_path();
+/*  shortest_path();
     ll c_max = maxSD();
-    remove_long_edge(c_max);
+    remove_long_edge(c_max); */
     vi term;
     for (int i=1; i<=n; ++i) 
         if (not removed[i] and is_terminal[i]) term.pb(i);
@@ -542,7 +580,10 @@ int main(int argc, char** argv)
 #endif
         solve(vert);
     }
-
+/*  vi vert(n);
+    iota(vert.begin(), vert.end(), 1);
+    solve(set<int>(vert.begin(), vert.end()));
+*/
     ll ans=0;
     set<pii> real_edges;
     for (auto& e: steiner)
