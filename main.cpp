@@ -1,4 +1,5 @@
 #include<bits/stdc++.h>
+#include<strings.h>
 
 #define MOD 1000000007
 #define pb push_back
@@ -416,6 +417,31 @@ string my_set_union(string& s1, string& s2)
     return s;
 }
 
+ll getMST(const vi& S)
+{
+    int n=S.size();
+
+    assert(n>1);
+    dsu d(n);
+
+    vector<pair<ll, pii>> edges;
+    for (int i=0; i<n; ++i)
+        for (int j=i+1; j<n; ++j)
+            edges.pb(mp(g[S[i]][S[j]], mp(i,j)));
+
+    sort(edges.begin(), edges.end());
+
+    int i=0;
+    ll ans=0;
+    while (d.num_comp() > 1)  {
+        int u = edges[i].ss.ff, v = edges[i].ss.ss;
+        if (d.find_set(u) != d.find_set(v))
+            ans += edges[i].ff, d.union_(u, v);
+        ++i;
+    }
+    return ans;
+}
+
 void solve(const set<int>& vertices)
 {
     vi term;
@@ -424,25 +450,72 @@ void solve(const set<int>& vertices)
     int k = term.size();
     if (k<=1) return;
 
+    int q = term.back();
+    //term.pop_back();
+
     unordered_map<ll, ll> dp[n+1];
     unordered_map<ll, set<label>> tr[n+1];
+    unordered_map<ll, ll> mst;
 
     auto my_comp = [&](label a, label b)->bool{
                         ll va = (dp[a.ff].find(a.ss) != dp[a.ff].end() ? dp[a.ff][a.ss] : inf);
                         ll vb = (dp[b.ff].find(b.ss) != dp[b.ff].end() ? dp[b.ff][b.ss] : inf);
 
-                        if (va < vb) return true;
-                        else if (vb < va) return false;
+                        ll la = 0, lb = 0;
+                        ll Ia = ((1ll<<k)-1) ^ a.ss;
+                        ll Ib = ((1ll<<k)-1) ^ b.ss;
+
+                        if ((Ia & (Ia-1)) == 0) {
+                            int i=__builtin_ffsll(Ia);
+                            la = g[a.ff][term[i-1]];
+                        }
+                        else {
+                            ll d1=inf, d2=inf+1;
+                            vi S;
+                            ll tmp=Ia;
+                            while (Ia) {
+                                int i = __builtin_ffsll(Ia);
+                                if (d1 >= g[a.ff][term[i-1]]) d2=d1, d1=g[a.ff][term[i-1]];
+                                else if (d2 > g[a.ff][term[i-1]]) d2=g[a.ff][term[i-1]];
+                                S.pb(term[i-1]);
+                                Ia ^= (1ll<<(i-1));
+                            }
+                            Ia = tmp;
+                            la = (d1+d2)/2;
+                            if (mst.find(Ia) == mst.end()) mst[Ia] = getMST(S);
+                            la += mst[Ia]/2;
+                        }
+                        
+                        if ((Ib & (Ib-1)) == 0) {
+                            int i=__builtin_ffsll(Ib);
+                            lb = g[b.ff][term[i-1]];
+                        }
+                        else {
+                            ll d1=inf, d2=inf+1;
+                            vi S;
+                            ll tmp=Ib;
+                            while (Ib) {
+                                int i = __builtin_ffsll(Ib);
+                                if (d1 >= g[b.ff][term[i-1]]) d2=d1, d1=g[b.ff][term[i-1]];
+                                else if (d2 > g[b.ff][term[i-1]]) d2=g[b.ff][term[i-1]];
+                                S.pb(term[i-1]);
+                                Ib ^= (1ll<<(i-1));
+                            }
+                            Ib = tmp;
+                            lb = (d1+d2)/2;
+                            if (mst.find(Ib) == mst.end()) mst[Ib] = getMST(S);
+                            lb += mst[Ib]/2;
+                        }
+
+                        if (va+la < vb+lb) return true;
+                        else if (vb+lb < va+la) return false;
                         return a < b;
                    };
     multiset<label, decltype(my_comp)> N(my_comp);
     unordered_set<ll> P[n+1];
     unordered_map<ll, decltype(N.begin())> it[n+1];
 
-    int q = term.back();
-    term.pop_back();
-
-    for (int i=0; i<term.size(); ++i) {
+    for (int i=0; i<term.size()-1; ++i) {
         ll t = 1ll<<i;
         dp[term[i]][t] = 0;
         it[term[i]][t] = N.insert(mp(term[i],t));
@@ -559,10 +632,10 @@ int main(int argc, char** argv)
 {
     ios::sync_with_stdio(false);
     input(cin);
-//  shortest_path();
+//    shortest_path();
     preprocess();
-/*  shortest_path();
-    ll c_max = maxSD();
+    shortest_path();
+/*    ll c_max = maxSD();
     remove_long_edge(c_max); */
     vi term;
     for (int i=1; i<=n; ++i) 
